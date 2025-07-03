@@ -5,11 +5,11 @@ from tools.pdf_tool import process_pdf_and_create_vectorstore
 from tools.chat_engine import build_chat_model
 from tools.memory import get_conversation_memory
 
-#  Directory for uploaded PDFs
+# Directory for uploaded PDFs
 TEMP_DIR = "temp/"
 os.makedirs(TEMP_DIR, exist_ok=True)
 
-#  Response Models
+# Response Models
 class APIMessage(BaseModel):
     message: str
 
@@ -29,72 +29,94 @@ class AboutInfo(BaseModel):
 class PDFList(BaseModel):
     files: list[str]
 
-
 # Initialize FastAPI
 app = FastAPI(
     title="StudyMate AI",
-    description=" Chat with PDFs using LangChain, OpenAI, and FAISS (RAG Pipeline).",
+    description="📚 Chat with PDFs using LangChain, OpenAI, and FAISS (RAG Pipeline).",
     version="2.0.0"
 )
 
-#  Global variables for chatbot
+# Global variables for chatbot
 chat_chain = None
 memory = None
-
 
 # 🌐 Home and About
 @app.get("/", response_model=APIMessage, status_code=status.HTTP_200_OK, tags=["Home"])
 async def home():
-    """
-    Home page: API welcome message
-    """
+    """Home page: API welcome message"""
     return APIMessage(
         message="👋 Welcome to StudyMate AI! Visit /about or /docs for details."
     )
 
-
 @app.get("/about", response_model=AboutInfo, status_code=status.HTTP_200_OK, tags=["About"])
 async def about():
-    """
-    About page: Provide information about StudyMate AI
-    """
+    """About page: Provide information about StudyMate AI"""
     return AboutInfo(
         project_name="StudyMate AI",
         description="An AI chatbot to interact with PDF documents using advanced retrieval techniques.",
         features=[
-            "Upload and process PDFs into vectorstore",
-            "Context-aware chat with memory",
-            "MMR, Multi-Query, and Compression Retrieval",
+            "✅ Upload and process PDFs into vectorstore",
+            "✅ Context-aware chat with memory",
+            "✅ MMR, Multi-Query, and Compression Retrieval",
         ],
         docs_url="/docs"
     )
 
-
-# Upload PDF
+# 📤 Upload PDF
 @app.post("/upload_pdf", response_model=APIMessage, status_code=status.HTTP_201_CREATED, tags=["PDF"])
-async def upload_pdf(file: UploadFile = File(...)):
+async def upload_pdf(file: UploadFile = File(...), overwrite: bool = Query(False, description="Overwrite existing PDF if true")):
     """
     Upload a PDF, process, and initialize chatbot engine.
     """
     try:
         file_path = os.path.join(TEMP_DIR, file.filename)
-        with open(file_path, "wb") as f:
-            f.write(await file.read())
 
+        # Check if file already exists
+        if os.path.exists(file_path) and not overwrite:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"⚠️ File '{file.filename}' already exists. Use ?overwrite=true to replace."
+            )
+
+        # Save uploaded file
+        file_content = await file.read()
+        if not file_content:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="❌ Uploaded file is empty or corrupted."
+            )
+        with open(file_path, "wb") as f:
+            f.write(file_content)
+
+        # Validate file size
+        if os.path.getsize(file_path) == 0:
+            os.remove(file_path)
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="❌ Failed to save PDF. File is empty."
+            )
+
+        # Process PDF into vectorstore
         process_pdf_and_create_vectorstore(file_path)
 
+        # Initialize chatbot engine
         global chat_chain, memory
         chat_chain, memory = build_chat_model()
 
-        return APIMessage(message=f" PDF '{file.filename}' uploaded and processed.")
+        return APIMessage(message=f"✅ PDF '{file.filename}' uploaded and processed successfully.")
+
+    except HTTPException as http_exc:
+        raise http_exc  # Propagate expected errors
     except Exception as e:
+        # Cleanup on failure
+        if os.path.exists(file_path):
+            os.remove(file_path)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f" Failed to process PDF: {str(e)}"
+            detail=f"❌ Failed to process PDF: {str(e)}"
         )
 
-
-#  Chat with PDF
+# 💬 Chat with PDF
 @app.post("/chat", response_model=ChatResponse, status_code=status.HTTP_200_OK, tags=["Chat"])
 async def chat_with_pdf(
     question: str = Form(..., description="Your question about the uploaded PDF.")
@@ -107,7 +129,7 @@ async def chat_with_pdf(
     if not chat_chain or not memory:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=" Please upload a PDF first using /upload_pdf."
+            detail="⚠️ Please upload a PDF first using /upload_pdf."
         )
 
     try:
@@ -116,14 +138,14 @@ async def chat_with_pdf(
         memory.save_context({"input": question}, {"output": response})
 
         return ChatResponse(question=question, answer=response)
+
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f" Failed to generate response: {str(e)}"
+            detail=f"❌ Failed to generate response: {str(e)}"
         )
 
-
-#  List Uploaded PDFs
+# 📂 List Uploaded PDFs
 @app.get("/list_pdfs", response_model=PDFList, status_code=status.HTTP_200_OK, tags=["PDF"])
 async def list_uploaded_pdfs():
     """List all uploaded PDFs."""
@@ -133,19 +155,15 @@ async def list_uploaded_pdfs():
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to list PDFs: {str(e)}"
+            detail=f"❌ Failed to list PDFs: {str(e)}"
         )
 
-
-#  Delete a PDF
+# 🗑️ Delete a PDF
 @app.delete(
     "/delete_pdf/{filename}",
     response_model=APIMessage,
     status_code=status.HTTP_200_OK,
-    responses={
-        404: {"model": APIError},
-        500: {"model": APIError}
-    },
+    responses={404: {"model": APIError}, 500: {"model": APIError}},
     tags=["PDF"]
 )
 async def delete_uploaded_pdf(
@@ -159,14 +177,14 @@ async def delete_uploaded_pdf(
     if not os.path.exists(file_path):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"File '{filename}' not found in {TEMP_DIR}."
+            detail=f"❌ File '{filename}' not found in {TEMP_DIR}."
         )
 
     try:
         os.remove(file_path)
-        return APIMessage(message=f"PDF '{filename}' deleted successfully.")
+        return APIMessage(message=f"🗑️ PDF '{filename}' deleted successfully.")
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f" Failed to delete '{filename}': {str(e)}"
+            detail=f"❌ Failed to delete '{filename}': {str(e)}"
         )

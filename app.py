@@ -1,89 +1,120 @@
 import streamlit as st
 import requests
 
-API_URL = "http://localhost:8000"  # Update with your FastAPI URL if deployed
+# FastAPI backend URL
+API_URL = "http://127.0.0.1:8000"
 
-st.set_page_config(page_title="StudyMate AI", page_icon="📚", layout="wide")
+# --- Streamlit App ---
+st.set_page_config(page_title="📚 StudyMate AI", layout="wide")
+st.title("📚 StudyMate AI")
+st.caption("Chat with your PDFs using LangChain + OpenAI + FAISS")
 
-# Home Page
-def home():
-    st.title("📚 StudyMate AI")
-    st.subheader("Chat with your PDFs – powered by FastAPI, LangChain, and OpenAI 💬")
-    st.markdown(
-        """
-        StudyMate AI lets you upload PDFs and interact with them using AI.
-        - **Upload PDFs**
-        - **Ask questions contextually**
-        - **Delete PDFs when no longer needed**
-        """
-    )
-    st.info("👋 Use the sidebar to navigate between features.")
+# --- Sidebar Navigation ---
+pages = ["🏠 Home", "📤 Upload PDF", "💬 Chat with PDF", "📂 Manage PDFs"]
+selection = st.sidebar.radio("Navigation", pages)
 
-def upload_pdf():
-    st.header("📤 Upload a PDF")
-    uploaded_file = st.file_uploader("Choose a PDF", type=["pdf"])
-    if uploaded_file is not None:
-        if st.button("Upload"):
+# --- Upload PDF ---
+if selection == "📤 Upload PDF":
+    st.header("📤 Upload your PDF")
+    uploaded_file = st.file_uploader("Choose a PDF file", type=["pdf"])
+    overwrite = st.checkbox("Overwrite if file already exists?", value=False)
+
+    if st.button("Upload"):
+        if uploaded_file is not None:
             with st.spinner("Uploading and processing..."):
-                response = requests.post(
-                    f"{API_URL}/upload_pdf",
-                    files={"file": uploaded_file.getvalue()},
-                )
-                if response.status_code == 200:
-                    st.success(f"✅ {response.json().get('message', 'PDF uploaded and processed!')}")
-                else:
-                    error_detail = response.json().get('detail', 'Something went wrong while uploading.')
-                    st.error(f"❌ Upload failed: {error_detail}")
-# Chat with PDF
-def chat_with_pdf():
-    st.header("💬 Chat with your PDF")
-    question = st.text_input("Ask a question about your PDF:")
+                try:
+                    # Send upload request
+                    response = requests.post(
+                        f"{API_URL}/upload_pdf",
+                        files={"file": uploaded_file.getvalue()},
+                        params={"overwrite": overwrite},
+                    )
+                    if response.status_code == 201:
+                        st.success("✅ " + response.json()["message"])
+                    elif response.status_code == 409:
+                        st.warning("⚠️ " + response.json()["detail"])
+                    else:
+                        st.error("❌ " + response.json().get("detail", "Unknown error"))
+                except Exception as e:
+                    st.error(f"❌ Upload failed: {e}")
+        else:
+            st.warning("⚠️ Please select a PDF file to upload.")
+
+# --- Chat with PDF ---
+elif selection == "💬 Chat with PDF":
+    st.header("💬 Chat with your uploaded PDF")
+    user_question = st.text_input("Ask a question about the PDF")
+
     if st.button("Ask"):
-        if question.strip() == "":
-            st.warning(" Please enter a question.")
+        if user_question.strip() == "":
+            st.warning("⚠️ Please enter a question.")
         else:
             with st.spinner("Thinking..."):
-                response = requests.post(
-                    f"{API_URL}/chat",
-                    data={"question": question}
-                )
-                if response.status_code == 200:
-                    answer = response.json()["answer"]
-                    st.success(f"🧠 {answer}")
-                else:
-                    st.error(f"❌ Error: {response.json()['detail']}")
-
-# List PDFs
-def list_pdfs():
-    st.header(" Uploaded PDFs")
-    response = requests.get(f"{API_URL}/list_pdfs")
-    if response.status_code == 200:
-        pdfs = response.json()["files"]
-        if pdfs:
-            for pdf in pdfs:
-                col1, col2 = st.columns([8, 2])
-                col1.write(pdf)
-                if col2.button(" Delete", key=pdf):
-                    delete_response = requests.delete(
-                        f"{API_URL}/delete_pdf", params={"filename": pdf}
+                try:
+                    response = requests.post(
+                        f"{API_URL}/chat",
+                        data={"question": user_question},
                     )
-                    if delete_response.status_code == 200:
-                        st.success(f" Deleted {pdf}")
+                    if response.status_code == 200:
+                        answer = response.json()["answer"]
+                        st.markdown(f"**🧑‍🎓 You:** {user_question}")
+                        st.markdown(f"**🤖 StudyMate AI:** {answer}")
                     else:
-                        st.error(f" Failed to delete: {delete_response.json()['detail']}")
-        else:
-            st.info("No PDFs uploaded yet.")
-    else:
-        st.error(f" Could not fetch PDFs: {response.json()['detail']}")
+                        st.error("❌ " + response.json().get("detail", "Unknown error"))
+                except Exception as e:
+                    st.error(f"❌ Failed to chat: {e}")
 
-# Sidebar Navigation
-pages = {
-    " Home": home,
-    " Upload PDF": upload_pdf,
-    " Chat with PDF": chat_with_pdf,
-    " Manage PDFs": list_pdfs,
-}
+# --- Manage PDFs ---
+elif selection == "📂 Manage PDFs":
+    st.header("📂 Manage Uploaded PDFs")
 
-st.sidebar.title("📚 StudyMate AI")
-selection = st.sidebar.radio("Go to", list(pages.keys()))
-pages[selection]()
+    # List PDFs
+    if st.button("📄 Refresh PDF List"):
+        try:
+            response = requests.get(f"{API_URL}/list_pdfs")
+            if response.status_code == 200:
+                pdf_files = response.json()["files"]
+                if pdf_files:
+                    st.success("✅ Found the following PDFs:")
+                    for pdf in pdf_files:
+                        col1, col2 = st.columns([4, 1])
+                        col1.markdown(f"- {pdf}")
+                        if col2.button("🗑️ Delete", key=pdf):
+                            delete_response = requests.delete(f"{API_URL}/delete_pdf/{pdf}")
+                            if delete_response.status_code == 200:
+                                st.success(f"🗑️ Deleted '{pdf}' successfully.")
+                            else:
+                                st.error("❌ " + delete_response.json().get("detail", "Delete failed"))
+                else:
+                    st.info("📂 No PDFs found in the system.")
+            else:
+                st.error("❌ " + response.json().get("detail", "Could not fetch PDF list"))
+        except Exception as e:
+            st.error(f"❌ Failed to fetch PDF list: {e}")
+
+# --- Home Page ---
+elif selection == "🏠 Home":
+    st.header("📚 StudyMate AI")
+    st.write("Welcome to StudyMate AI!")
+    st.write(
+        """
+        - Upload your PDF documents and process them into a **vectorstore**.
+        - Ask questions about your documents in natural language.
+        - Delete or manage uploaded PDFs as needed.
+        """
+    )
+    if st.button("📖 About"):
+        try:
+            response = requests.get(f"{API_URL}/about")
+            if response.status_code == 200:
+                about = response.json()
+                st.subheader(about["project_name"])
+                st.markdown(about["description"])
+                st.write("### Features")
+                for feature in about["features"]:
+                    st.markdown(f"- {feature}")
+                st.markdown(f"📖 [API Docs]({about['docs_url']})")
+            else:
+                st.error("❌ Could not load about page.")
+        except Exception as e:
+            st.error(f"❌ Failed to fetch about page: {e}")
