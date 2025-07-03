@@ -1,0 +1,14 @@
+fastapi
+uvicorn
+python-multipart
+langchain
+openai
+langchain-openai
+langchain-community
+PyMuPDF
+faiss-cpu
+streamlit
+requests
+rich
+python-dotenv
+PyPDF2
