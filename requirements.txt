@@ -12,3 +12,4 @@ requests
 rich
 python-dotenv
 PyPDF2
+pypdf
