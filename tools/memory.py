@@ -1,6 +1,8 @@
 # memory
 from langchain.memory.buffer import ConversationBufferMemory
 
+
+
 def get_conversation_memory(memory_key:str="chat_history"):
     """
     Returns an instance of ConversationBufferMemory.

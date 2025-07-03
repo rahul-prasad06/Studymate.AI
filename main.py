@@ -70,7 +70,7 @@ async def about():
     )
 
 
-# 📤 Upload PDF
+# Upload PDF
 @app.post("/upload_pdf", response_model=APIMessage, status_code=status.HTTP_201_CREATED, tags=["PDF"])
 async def upload_pdf(file: UploadFile = File(...)):
     """
@@ -107,7 +107,7 @@ async def chat_with_pdf(
     if not chat_chain or not memory:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="⚠️ Please upload a PDF first using /upload_pdf."
+            detail=" Please upload a PDF first using /upload_pdf."
         )
 
     try:

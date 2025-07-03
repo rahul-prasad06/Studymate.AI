@@ -39,7 +39,6 @@ def load_vector_store(folder_path="vectorstore/"):
     return base_retriever
 
 
-
 # Build Chat Model (LLM + Retriever + Memory)
 
 def build_chat_model():
