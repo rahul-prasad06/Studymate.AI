@@ -1,13 +1,15 @@
 import os
+import shutil
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, status, Query, Path
 from pydantic import BaseModel
 from tools.pdf_tool import process_pdf_and_create_vectorstore
 from tools.chat_engine import build_chat_model
-from tools.memory import get_conversation_memory
 
-# Directory for uploaded PDFs
+# Directories for PDF and Vectorstore
 TEMP_DIR = "temp/"
+VECTORSTORE_DIR = "vectorstore/"
 os.makedirs(TEMP_DIR, exist_ok=True)
+os.makedirs(VECTORSTORE_DIR, exist_ok=True)
 
 # Response Models
 class APIMessage(BaseModel):
@@ -17,6 +19,7 @@ class APIError(BaseModel):
     detail: str
 
 class ChatResponse(BaseModel):
+    pdf_name: str
     question: str
     answer: str
 
@@ -32,159 +35,157 @@ class PDFList(BaseModel):
 # Initialize FastAPI
 app = FastAPI(
     title="StudyMate AI",
-    description="📚 Chat with PDFs using LangChain, OpenAI, and FAISS (RAG Pipeline).",
-    version="2.0.0"
+    description="Chat with PDFs using LangChain, OpenAI, and FAISS (RAG Pipeline).",
+    version="2.1.0"
 )
 
-# Global variables for chatbot
-chat_chain = None
-memory = None
+# Global dict for chat sessions per PDF
+chat_sessions = {}
 
-# 🌐 Home and About
-@app.get("/", response_model=APIMessage, status_code=status.HTTP_200_OK, tags=["Home"])
+# 🔹 Home Route
+@app.get("/", response_model=APIMessage, tags=["Home"])
 async def home():
-    """Home page: API welcome message"""
-    return APIMessage(
-        message="👋 Welcome to StudyMate AI! Visit /about or /docs for details."
-    )
+    return APIMessage(message="Welcome to StudyMate AI! Upload PDFs and start chatting at /upload_pdf.")
 
-@app.get("/about", response_model=AboutInfo, status_code=status.HTTP_200_OK, tags=["About"])
+# 🔹 About Route
+@app.get("/about", response_model=AboutInfo, tags=["About"])
 async def about():
-    """About page: Provide information about StudyMate AI"""
     return AboutInfo(
         project_name="StudyMate AI",
-        description="An AI chatbot to interact with PDF documents using advanced retrieval techniques.",
+        description="An AI-powered assistant to interact with PDF documents using retrieval-augmented generation (RAG).",
         features=[
-            "✅ Upload and process PDFs into vectorstore",
-            "✅ Context-aware chat with memory",
-            "✅ MMR, Multi-Query, and Compression Retrieval",
+            "Upload and process PDFs into vectorstore",
+            "Context-aware chat with memory",
+            "Supports MMR, Multi-Query, and Contextual Compression Retrieval",
         ],
         docs_url="/docs"
     )
 
-# 📤 Upload PDF
-@app.post("/upload_pdf", response_model=APIMessage, status_code=status.HTTP_201_CREATED, tags=["PDF"])
-async def upload_pdf(file: UploadFile = File(...), overwrite: bool = Query(False, description="Overwrite existing PDF if true")):
-    """
-    Upload a PDF, process, and initialize chatbot engine.
-    """
+# Upload PDF
+@app.post("/upload_pdf", response_model=APIMessage, tags=["PDF"])
+async def upload_pdf(
+    file: UploadFile = File(...),
+    overwrite: bool = Query(False, description="Set true to overwrite an existing PDF.")
+):
+    
+    file_path = os.path.join(TEMP_DIR, file.filename)
+    pdf_folder = os.path.join(VECTORSTORE_DIR, os.path.splitext(file.filename)[0])
+
+    if os.path.exists(file_path) and not overwrite:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"File '{file.filename}' already exists. Use overwrite=true to replace it."
+        )
+
     try:
-        file_path = os.path.join(TEMP_DIR, file.filename)
-
-        # Check if file already exists
-        if os.path.exists(file_path) and not overwrite:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=f"⚠️ File '{file.filename}' already exists. Use ?overwrite=true to replace."
-            )
-
-        # Save uploaded file
-        file_content = await file.read()
-        if not file_content:
+        # Save PDF to temp directory
+        content = await file.read()
+        if not content:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="❌ Uploaded file is empty or corrupted."
+                detail="Uploaded file is empty or corrupted."
             )
         with open(file_path, "wb") as f:
-            f.write(file_content)
-
-        # Validate file size
-        if os.path.getsize(file_path) == 0:
-            os.remove(file_path)
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="❌ Failed to save PDF. File is empty."
-            )
+            f.write(content)
 
         # Process PDF into vectorstore
-        process_pdf_and_create_vectorstore(file_path)
+        process_pdf_and_create_vectorstore(file_path, base_dir=VECTORSTORE_DIR)
 
-        # Initialize chatbot engine
-        global chat_chain, memory
-        chat_chain, memory = build_chat_model()
+        # Build chat session for this PDF
+        chat_chain, memory = build_chat_model(pdf_name=file.filename)
+        chat_sessions[file.filename] = {"chain": chat_chain, "memory": memory}
 
-        return APIMessage(message=f"✅ PDF '{file.filename}' uploaded and processed successfully.")
+        return APIMessage(message=f" PDF '{file.filename}' uploaded and processed successfully.")
 
-    except HTTPException as http_exc:
-        raise http_exc  # Propagate expected errors
     except Exception as e:
-        # Cleanup on failure
         if os.path.exists(file_path):
-            os.remove(file_path)
+            os.remove(file_path)  # Cleanup on failure
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"❌ Failed to process PDF: {str(e)}"
+            detail=f" Failed to process PDF: {str(e)}"
         )
 
-# 💬 Chat with PDF
-@app.post("/chat", response_model=ChatResponse, status_code=status.HTTP_200_OK, tags=["Chat"])
+# Chat with PDF
+@app.post("/chat/{pdf_name}", response_model=ChatResponse, tags=["Chat"])
 async def chat_with_pdf(
-    question: str = Form(..., description="Your question about the uploaded PDF.")
+    pdf_name: str = Path(..., description="Name of the PDF file to chat with."),
+    question: str = Form(..., description="Your question about the PDF.")
 ):
-    """
-    Ask a question about the PDF and get an AI-generated answer.
-    """
-    global chat_chain, memory
-
-    if not chat_chain or not memory:
+    session = chat_sessions.get(pdf_name)
+    if not session:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="⚠️ Please upload a PDF first using /upload_pdf."
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f" No chat session found for '{pdf_name}'. Please upload the PDF first."
         )
+
+    chat_chain = session["chain"]
+    memory = session["memory"]
 
     try:
+        # Retrieve chat history
         chat_history = memory.load_memory_variables({})["chat_history"]
-        response = chat_chain.invoke({"question": question, "chat_history": chat_history})
+
+        # Generate response
+        response = chat_chain.invoke({
+            "question": question,
+            "chat_history": chat_history
+        })
+
+        # Save to memory
         memory.save_context({"input": question}, {"output": response})
 
-        return ChatResponse(question=question, answer=response)
+        return ChatResponse(
+            pdf_name=pdf_name,
+            question=f"You asked: {question}",
+            answer=f"AI answered: {response}"
+        )
 
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"❌ Failed to generate response: {str(e)}"
+            detail=f"Failed to generate response: {str(e)}"
         )
 
-# 📂 List Uploaded PDFs
-@app.get("/list_pdfs", response_model=PDFList, status_code=status.HTTP_200_OK, tags=["PDF"])
+# 🔹 List Uploaded PDFs
+@app.get("/list_pdfs", response_model=PDFList, tags=["PDF"])
 async def list_uploaded_pdfs():
-    """List all uploaded PDFs."""
     try:
         files = [f for f in os.listdir(TEMP_DIR) if f.endswith(".pdf")]
         return PDFList(files=files)
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"❌ Failed to list PDFs: {str(e)}"
+            detail=f" Failed to list PDFs: {str(e)}"
         )
 
-# 🗑️ Delete a PDF
-@app.delete(
-    "/delete_pdf/{filename}",
-    response_model=APIMessage,
-    status_code=status.HTTP_200_OK,
-    responses={404: {"model": APIError}, 500: {"model": APIError}},
-    tags=["PDF"]
-)
+# Delete PDF
+@app.delete("/delete_pdf/{filename}", response_model=APIMessage, tags=["PDF"])
 async def delete_uploaded_pdf(
     filename: str = Path(..., description="Name of the PDF file to delete")
 ):
-    """
-    Delete a specific PDF file from the temp folder.
-    """
+    
     file_path = os.path.join(TEMP_DIR, filename)
+    vectorstore_path = os.path.join(VECTORSTORE_DIR, os.path.splitext(filename)[0])
+
 
     if not os.path.exists(file_path):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"❌ File '{filename}' not found in {TEMP_DIR}."
+            detail=f" File '{filename}' not found."
         )
 
     try:
+         # Delete PDF
         os.remove(file_path)
-        return APIMessage(message=f"🗑️ PDF '{filename}' deleted successfully.")
+
+        # Delete vectorstore folder
+        if os.path.exists(vectorstore_path):
+            shutil.rmtree(vectorstore_path)
+
+        chat_sessions.pop(filename, None)  # Remove chat session if exists
+        return APIMessage(message=f"PDF '{filename}' deleted successfully.")
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"❌ Failed to delete '{filename}': {str(e)}"
+            detail=f"Failed to delete '{filename}': {str(e)}"
         )

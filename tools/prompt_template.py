@@ -4,21 +4,13 @@ from langchain_core.prompts.chat import HumanMessagePromptTemplate,SystemMessage
 
 
 def get_pdf_chat_prompt():
-     """
-    Returns a ChatPromptTemplate that formats:
-    - System role (StudyMate: friendly tutor)
-    - Chat history
-    - User's current question
-    - Retrieved document context
 
-    Returns:
-        ChatPromptTemplate
-    """
      prompt=ChatPromptTemplate.from_messages(
           [
               SystemMessagePromptTemplate.from_template("You are StudyMate, a helpful and intelligent tutor. "
             "You answer user questions based on the provided context from a PDF. "
-            "If you are unsure or the answer is not in the context, respond clearly that you don't know."
+            "If you are unsure or the answer is not in the context, respond clearly that you don't know." \
+            "Be concise and acurate in your response."
         ),
 
 

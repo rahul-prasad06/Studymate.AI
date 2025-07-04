@@ -1,79 +1,85 @@
-#pdf_tool
-"""
-This module handles Indexing of the RAG:
-1. Reading PDF files
-2. Splitting text into chunks
-3. Embedding using OpenAIEmbeddings
-4. Storing vectors in FAISS vector store
-"""
-
 import os
+import pathlib
 from langchain_community.document_loaders import PyPDFLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
 from langchain_openai import OpenAIEmbeddings
 from dotenv import load_dotenv
 
+# Load environment variables
 load_dotenv()
 
 
-# 1. Document Ingestion
-def load_pdf(file_path):
-    """Load PDF and return list of Document objects"""
+# Load PDF
+def load_pdf(file_path: str):
+    if not os.path.exists(file_path):
+        raise FileNotFoundError(f"PDF file '{file_path}' not found.")
+
+    print(f"Loading PDF: {file_path}")
     loader = PyPDFLoader(file_path)
     docs = loader.load()
+    print(f"Loaded {len(docs)} pages.")
     return docs
 
 
-# 2. Text Chunking
-def split_chunks(docs):
-    """Split documents into chunks"""
+# Split text into chunks
+def split_chunks(docs: list):
+    print(" Splitting text into chunks...")
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=1000,
         chunk_overlap=200
     )
     chunks = splitter.split_documents(docs)
+    print(f"Created {len(chunks)} chunks.")
     return chunks
 
 
-# 3. Embed and store in FAISS vector store
-def create_and_save_vectorstore(docs: list, save_path="vectorstore/"):
-    """Create vectorstore from chunks and save locally"""
+# Create & save FAISS vectorstore
+def create_and_save_vectorstore(docs, pdf_name: str, base_dir="vectorstore/"):
+    print("Generating embeddings and creating FAISS vectorstore...")
     embeddings = OpenAIEmbeddings()
     vectorstore = FAISS.from_documents(docs, embeddings)
-    os.makedirs(save_path, exist_ok=True)
-    vectorstore.save_local(save_path)
+
+    # Save vectorstore to folder: vectorstore/<pdf_name_without_extension>/
+    pdf_folder = os.path.join(base_dir, pathlib.Path(pdf_name).stem)
+    os.makedirs(pdf_folder, exist_ok=True)
+
+    print(f" Saving vectorstore to: {pdf_folder}")
+    vectorstore.save_local(pdf_folder)
+    print(f" Vectorstore saved successfully.")
+
     return vectorstore
 
 
-# 4. Full pipeline to run all steps
-def process_pdf_and_create_vectorstore(pdf_path: str, save_path="vectorstore/"):
-    """Process PDF -> Chunk -> Embed -> Save vectorstore"""
+#  Full pipeline
+def process_pdf_and_create_vectorstore(pdf_path: str, base_dir="vectorstore/"):
+    pdf_name = os.path.basename(pdf_path)
+    vectorstore_dir = os.path.join(base_dir, pathlib.Path(pdf_name).stem)
+
+    if os.path.exists(vectorstore_dir):
+        print(f" Vectorstore already exists for '{pdf_name}' in {vectorstore_dir}. Overwriting.")
+
     docs = load_pdf(pdf_path)
     chunks = split_chunks(docs)
-    vectorstore = create_and_save_vectorstore(chunks, save_path)
-    return vectorstore
+    return create_and_save_vectorstore(chunks, pdf_name, base_dir)
 
 
-
-
-#Local test block
+#  Local test block
 if __name__ == "__main__":
-    pdf_path = r"C:\Users\prasa\Downloads\bert.pdf"  # Place your PDF in project root
+    pdf_path = r"C:\Users\prasa\Downloads\bert.pdf"
 
-    if not os.path.exists(pdf_path):
-        print(f"PDF file '{pdf_path}' not found. Please place it in the project folder.")
-    elif not os.getenv("OPENAI_API_KEY"):
-        print("Missing OpenAI API key in .env file.")
+    if not os.getenv("OPENAI_API_KEY"):
+        print(" Missing OpenAI API key in .env file.")
     else:
-        print("Starting indexing pipeline...")
+        print(" Starting PDF processing pipeline...")
         vectorstore = process_pdf_and_create_vectorstore(pdf_path)
 
         # Test similarity search
-        query = "What is this PDF about?"
-        results = vectorstore.similarity_search(query, k=3)
+        test_query = "What is BERT in NLP?"
+        print(f"\n Testing similarity search for query: '{test_query}'")
+        results = vectorstore.similarity_search(test_query, k=3)
 
-        print("\n✅ Top 3 Results for Query:")
-        for i, doc in enumerate(results, 1):
-            print(f"\nResult {i}:")
-            print(doc.page_content[:300])  # First 300 characters
+        print("\n Top 3 Results:")
+        for idx, doc in enumerate(results, 1):
+            print(f"\nResult {idx}:")
+            print(doc.page_content[:300] + "...")

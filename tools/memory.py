@@ -1,18 +1,13 @@
 # memory
+import os
 from langchain.memory.buffer import ConversationBufferMemory
 
 
 
-def get_conversation_memory(memory_key:str="chat_history"):
-    """
-    Returns an instance of ConversationBufferMemory.
+def get_conversation_memory(pdf_name:str , memory_key:str="chat_history"):
 
-    Parameters:
-        memory_key (str): Key used to track chat history in LangChain.
+    scoped_memory_key = f"{os.path.splitext(pdf_name)[0]}_{memory_key}"
 
-    Returns:
-        ConversationBufferMemory object
-    """
     memory= ConversationBufferMemory(
         memory_key=memory_key,
         return_messages=True  # required for message-style history
