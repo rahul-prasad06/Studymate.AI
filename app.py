@@ -114,7 +114,7 @@ elif choice == "Upload PDF":
             except Exception as e:
                 st.error(f"Upload failed: {e}")
     else:
-        st.info("📄 Please select a PDF file to upload.")
+        st.info("Please select a PDF file to upload.")
 
 elif choice == "Chat with PDF":
     st.header("Chat with Your PDF")
@@ -148,6 +148,3 @@ elif choice == "Manage PDFs":
             col1.markdown(f"{pdf}")
             if col2.button(" Delete", key=pdf):
                 delete_pdf(pdf)
-
-
-    
