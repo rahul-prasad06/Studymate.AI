@@ -8,8 +8,7 @@ API_URL = "http://127.0.0.1:8000"
 st.set_page_config(
     page_title="StudyMate AI",
     page_icon=" ",
-
-    layout="wide",
+    layout="wide"
 )
 st.title("StudyMate AI")
 st.caption("Chat with your PDFs using LangChain + OpenAI + FAISS")
