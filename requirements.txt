@@ -5,11 +5,14 @@ langchain
 openai
 langchain-openai
 langchain-community
+langchain-core
 PyMuPDF
 faiss-cpu
 streamlit
 requests
+pydantic
 rich
 python-dotenv
 PyPDF2
 pypdf
+

@@ -1,10 +1,17 @@
 import os
 import shutil
+import uvicorn
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, status, Query, Path
 from pydantic import BaseModel
+from fastapi.middleware.cors import CORSMiddleware
+from typing import List
+
+
 from tools.pdf_tool import process_pdf_and_create_vectorstore
 from tools.chat_engine import build_chat_model
+from dotenv import load_dotenv
 
+load_dotenv()
 # Directories for PDF and Vectorstore
 TEMP_DIR = "temp/"
 VECTORSTORE_DIR = "vectorstore/"
@@ -39,6 +46,18 @@ app = FastAPI(
     version="2.1.0"
 )
 
+
+
+# Enable CORS for frontend (Streamlit)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Or restrict to ["http://localhost:8501"]
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
 # Global dict for chat sessions per PDF
 chat_sessions = {}
 
@@ -56,7 +75,7 @@ async def about():
         features=[
             "Upload and process PDFs into vectorstore",
             "Context-aware chat with memory",
-            "Supports MMR, Multi-Query, and Contextual Compression Retrieval",
+            "Supports MMR and Multi-Query Retrieval",
         ],
         docs_url="/docs"
     )
@@ -189,3 +208,5 @@ async def delete_uploaded_pdf(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to delete '{filename}': {str(e)}"
         )
+if __name__ == "__main__":
+    uvicorn.run("main:app", host="0.0.0.0", port=8000,reload=True)
