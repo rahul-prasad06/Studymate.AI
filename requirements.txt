@@ -16,3 +16,5 @@ python-dotenv
 PyPDF2
 pypdf
 
+langchain-google-genai
+google-generativeai
