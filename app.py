@@ -73,7 +73,7 @@ def delete_pdf(filename):
 
 def main():
     st.title("StudyMate AI")
-    st.caption("Chat with your PDFs using LangChain + OpenAI + FAISS")
+    st.caption("Chat with your PDFs using LangChain + OpenAI/Gemini + FAISS")
     pages = ["Home", "Upload PDF", "Chat with PDF", "Manage PDFs"]
     choice = st.sidebar.selectbox("Navigation", pages)
 

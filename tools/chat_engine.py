@@ -48,7 +48,7 @@ def build_chat_model(pdf_name: str):
     base_retriever = load_vector_store(pdf_name)
      # Gemini chat model
     llm = ChatGoogleGenerativeAI(
-        model="gemini-1.5-flash",max_tokens=2000,
+        model="gemini-2.5-flash",max_tokens=5000,
         temperature=0.3 
     )
     multi_query_retriever = MultiQueryRetriever.from_llm(
