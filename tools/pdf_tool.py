@@ -4,6 +4,7 @@ from langchain_community.document_loaders import PyPDFLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
 from langchain_openai import OpenAIEmbeddings
+from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -37,7 +38,8 @@ def split_chunks(docs: list):
 # Create & save FAISS vectorstore
 def create_and_save_vectorstore(docs, pdf_name: str, base_dir="vectorstore/"):
     print("Generating embeddings and creating FAISS vectorstore...")
-    embeddings = OpenAIEmbeddings()
+    embeddings = GoogleGenerativeAIEmbeddings(
+        model="models/embedding-001")
     vectorstore = FAISS.from_documents(docs, embeddings)
 
     # Save vectorstore to folder: vectorstore/<pdf_name_without_extension>/
@@ -68,8 +70,8 @@ def process_pdf_and_create_vectorstore(pdf_path: str, base_dir="vectorstore/"):
 if __name__ == "__main__":
     pdf_path = r"C:\Users\prasa\Downloads\bert.pdf"
 
-    if not os.getenv("OPENAI_API_KEY"):
-        print(" Missing OpenAI API key in .env file.")
+    if not os.getenv("GOOGLE_API_KEY"):
+        print(" Missing gemini API key in .env file.")
     else:
         print(" Starting PDF processing pipeline...")
         vectorstore = process_pdf_and_create_vectorstore(pdf_path)

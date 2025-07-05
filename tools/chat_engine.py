@@ -1,6 +1,9 @@
 import os
+import warnings
+warnings.simplefilter("ignore")
 from langchain_community.vectorstores import FAISS                # For FAISS vectorstore operations
-from langchain_openai import OpenAIEmbeddings, ChatOpenAI         # OpenAI LLM + embeddings
+from langchain_openai import OpenAIEmbeddings, ChatOpenAI  
+from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI       # OpenAI LLM + embeddings
 from langchain.retrievers.multi_query import MultiQueryRetriever  # Multi-query retriever for better recall
 from langchain.schema.runnable import RunnableMap                 # For building modular chains
 from langchain_core.output_parsers import StrOutputParser         # Parses output into string
@@ -24,7 +27,9 @@ def load_vector_store(pdf_name: str, base_dir="vectorstore/"):
     if not os.path.exists(folder_path):
         raise FileNotFoundError(f"Vectorstore for '{pdf_name}' not found in {folder_path}")
     
-    embeddings = OpenAIEmbeddings()
+    embeddings = GoogleGenerativeAIEmbeddings(
+        model="models/embedding-001")
+    
     vector_store = FAISS.load_local(
         folder_path=folder_path,
         embeddings=embeddings,
@@ -41,10 +46,10 @@ def load_vector_store(pdf_name: str, base_dir="vectorstore/"):
 def build_chat_model(pdf_name: str):
     
     base_retriever = load_vector_store(pdf_name)
-    llm = ChatOpenAI(
-        model_name="gpt-4",
-        openai_api_key=os.getenv("OPENAI_API_KEY"),
-        temperature=0.3,
+     # Gemini chat model
+    llm = ChatGoogleGenerativeAI(
+        model="gemini-1.5-flash",max_tokens=2000,
+        temperature=0.3 
     )
     multi_query_retriever = MultiQueryRetriever.from_llm(
         retriever=base_retriever,
