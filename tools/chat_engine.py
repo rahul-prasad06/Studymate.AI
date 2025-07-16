@@ -2,8 +2,8 @@ import os
 import warnings
 warnings.simplefilter("ignore")
 from langchain_community.vectorstores import FAISS                # For FAISS vectorstore operations
-from langchain_openai import OpenAIEmbeddings, ChatOpenAI  
-from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI       # OpenAI LLM + embeddings
+from langchain_openai import OpenAIEmbeddings, ChatOpenAI     
+from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI       # OpenAI LLM / gemini  + embeddings
 from langchain.retrievers.multi_query import MultiQueryRetriever  # Multi-query retriever for better recall
 from langchain.schema.runnable import RunnableMap                 # For building modular chains
 from langchain_core.output_parsers import StrOutputParser         # Parses output into string
@@ -74,7 +74,7 @@ def build_chat_model(pdf_name: str):
     return chain, memory
 
 
-
+# Test block to run the chat model with a PDF
 
 if __name__ == "__main__":
     pdf_name = "bert.pdf"

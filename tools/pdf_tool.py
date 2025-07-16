@@ -66,7 +66,7 @@ def process_pdf_and_create_vectorstore(pdf_path: str, base_dir="vectorstore/"):
     return create_and_save_vectorstore(chunks, pdf_name, base_dir)
 
 
-#  Local test block
+#  Test block
 if __name__ == "__main__":
     pdf_path = r"C:\Users\prasa\Downloads\bert.pdf"
 

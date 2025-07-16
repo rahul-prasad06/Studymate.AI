@@ -51,7 +51,7 @@ app = FastAPI(
 # Enable CORS for frontend (Streamlit)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Or restrict to ["http://localhost:8501"]
+    allow_origins=["*"],  
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -61,12 +61,12 @@ app.add_middleware(
 # Global dict for chat sessions per PDF
 chat_sessions = {}
 
-# 🔹 Home Route
+# Home Route
 @app.get("/", response_model=APIMessage, tags=["Home"])
 async def home():
     return APIMessage(message="Welcome to StudyMate AI! Upload PDFs and start chatting at /upload_pdf.")
 
-# 🔹 About Route
+# About Route
 @app.get("/about", response_model=AboutInfo, tags=["About"])
 async def about():
     return AboutInfo(
@@ -165,7 +165,7 @@ async def chat_with_pdf(
             detail=f"Failed to generate response: {str(e)}"
         )
 
-# 🔹 List Uploaded PDFs
+# List Uploaded PDFs
 @app.get("/list_pdfs", response_model=PDFList, tags=["PDF"])
 async def list_uploaded_pdfs():
     try:
